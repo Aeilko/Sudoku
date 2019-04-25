@@ -51,17 +51,17 @@ public class Coordinate implements Comparable<Coordinate> {
 				return 0;
 			}
 			else if(c.getY() < this.y){
-				return -1;
+				return 1;
 			}
 			else{
-				return 1;
+				return -1;
 			}
 		}
 		else if(c.getX() < this.x){
-			return -1;
+			return 1;
 		}
 		else{
-			return 1;
+			return -1;
 		}
 	}
 }

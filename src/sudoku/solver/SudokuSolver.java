@@ -1,6 +1,8 @@
 package sudoku.solver;
 
 import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.TreeMap;
 
 import sudoku.Sudoku;
@@ -19,6 +21,8 @@ public class SudokuSolver {
 	private boolean solved;
 	
 	// Mogelijkheden
+	// TODO: hokPossible is just wrong. Change it to a hashSet, and define which way around the coords are.
+	// TODO: Currently the called (col, row) in the code, but actually are (row, col)
 	private TreeMap<Coordinate, ArrayList<Integer>> hokPossible;
 	private TreeMap<Integer, ArrayList<Integer>> colPossible;
 	private TreeMap<Integer, ArrayList<Integer>> rowPossible;
@@ -72,21 +76,31 @@ public class SudokuSolver {
 		this.startTime = System.nanoTime();
 		// Maximaal 81 keer proberen (aantal vakjes in een sudoku)
 		for(int i = 0; i < 81 && !this.solved; i++){
+			System.out.println("Round " + i);
 			Sudoku oldSudoku = (Sudoku) this.sudoku.clone();
 			this.enkeleMogelijkheid();
 			this.checkCols();
 			this.checkRows();
 			this.checkBlok();
 			
-			// Twin methode's alleen uitvoeren als er niks veranderd is, aangezien deze vrij zwaar zijn.
+			// Deze methode's alleen uitvoeren als er niks veranderd is, aangezien deze vrij zwaar zijn.
 			if(this.sudoku.equals(oldSudoku)){
 				this.twinCols();
 				this.twinRows();
 				this.twinBlok();
+
+				if(this.sudoku.equals(oldSudoku)){
+					this.slings();
+				}
 			}
-			
+
 			this.checkSolved();
 		}
+
+		//System.out.println("Row 1 poss: " + this.getRowPossibilities(0));
+		//System.out.println("Col 1 poss: " + this.getColPossibilities(0));
+		//System.out.println("Block 3 poss: " + this.getBlockPossibilities(2));
+
 		this.stopTime = System.nanoTime();;
 		return this.isSolved();
 	}
@@ -155,8 +169,7 @@ public class SudokuSolver {
 				this.hokPossible.get(new Coordinate(i, j)).remove((Object) val);
 			}
 		}
-		
-		
+
 		// Waarde doorgeven
 		this.sudoku.setVal((short) col, (short) row, (short) val);
 	}
@@ -224,6 +237,108 @@ public class SudokuSolver {
 					// Er is maar 1 mogelijkheid in dit hokje, waarde invullen.
 					this.setValue(i, j, temp.get(0));
 				}
+			}
+		}
+	}
+
+	private void slings(){
+		HashMap<Integer, HashSet<Integer>> possibilities;
+
+		// Perform slings with cols.
+		System.out.println("Sling cols");
+		for(int i = 0; i < 9; i++) {
+			possibilities = this.getColPossibilities(i);
+			possibilities = this.sling(possibilities);
+			this.setColPossibilities(i, possibilities);
+		}
+
+		// Perform slings with rows.
+		System.out.println("Sling rows");
+		for(int i = 0; i < 9; i++){
+			possibilities = this.getRowPossibilities(i);
+			possibilities = this.sling(possibilities);
+			this.setRowPossibilities(i, possibilities);
+		}
+
+		// Perform slings with blocks.
+		System.out.println("Sling blocks");
+		for(int i = 0; i < 9; i++){
+			possibilities = this.getBlockPossibilities(i);
+			possibilities = this.sling(possibilities);
+			this.setBlockPossibilities(i, possibilities);
+		}
+	}
+
+	private HashMap<Integer, HashSet<Integer>> getColPossibilities(int col){
+		HashMap<Integer, HashSet<Integer>> result = new HashMap<>();
+
+		for(int row = 0; row < 9; row++){
+			// TODO: Replace hokPossible with a HashSet
+			HashSet<Integer> tmp = new HashSet();
+			tmp.addAll((this.hokPossible.get(new Coordinate(row, col))));
+			result.put(row, tmp);
+		}
+
+		return result;
+	}
+
+	private void setColPossibilities(int col, HashMap<Integer, HashSet<Integer>> poss){
+		for(int row = 0; row < 9; row++){
+			// TODO: replace hokPossible with a HashSet
+			ArrayList<Integer> tmp = new ArrayList<>();
+			tmp.addAll(poss.get(row));
+			this.hokPossible.put(new Coordinate(row, col), tmp);
+		}
+	}
+
+	private HashMap<Integer, HashSet<Integer>> getRowPossibilities(int row){
+		HashMap<Integer, HashSet<Integer>> result = new HashMap<>();
+
+		for(int col = 0; col < 9; col++){
+			// TODO: replace hokPossible with a HashSet
+			HashSet<Integer> tmp = new HashSet<>();
+			tmp.addAll(this.hokPossible.get(new Coordinate(row, col)));
+			result.put(col, tmp);
+		}
+
+		return result;
+	}
+
+	private void setRowPossibilities(int row, HashMap<Integer, HashSet<Integer>> poss){
+		for(int col = 0; col < 9; col++){
+			// TODO: replace hokPossible with a HashSet
+			ArrayList<Integer> tmp = new ArrayList<>();
+			tmp.addAll(poss.get(col));
+			this.hokPossible.put(new Coordinate(row, col), tmp);
+		}
+	}
+
+	private HashMap<Integer, HashSet<Integer>> getBlockPossibilities(int block){
+		HashMap<Integer, HashSet<Integer>> result = new HashMap<>();
+
+		int i = 0;
+		for(int row = (block/3)*3; row < ((block/3)+1)*3; row++){
+			for(int col = (block%3)*3; col < ((block%3)+1)*3; col++) {
+				// TODO: Replace hokPossible with a HashSet
+				HashSet<Integer> tmp = new HashSet<>();
+				tmp.addAll(this.hokPossible.get(new Coordinate(row, col)));
+				result.put(i, tmp);
+				i++;
+			}
+		}
+
+		return result;
+	}
+
+	private void setBlockPossibilities(int block, HashMap<Integer, HashSet<Integer>> poss){
+		int i = 0;
+		for(int row = (block/3)*3; row < ((block/3)+1)*3; row++){
+			for(int col = (block%3)*3; col < ((block%3)+1)*3; col++) {
+				// TODO: Replace hokPossible with a HashSet
+				ArrayList<Integer> tmp = new ArrayList<>();
+				tmp.addAll(poss.get(i));
+				this.hokPossible.put(new Coordinate(row, col), tmp);
+				i++;
 			}
 		}
 	}
@@ -480,8 +595,55 @@ public class SudokuSolver {
 			}
 		}
 	}
-	
-	
+
+	/***
+	 * Checks if it can find a sling of fields which have to contain a certain series of numbers.
+	 * Example: 4 fields, possibilities (8,3),(3,6),(6,8),(9,3). The first 3 columns must contain 3,6 and 8.
+	 * 			So now we can remove 3 as a possibility from the 4th field, and therefore it has to be 9.
+	 */
+	private HashMap<Integer, HashSet<Integer>> sling(HashMap<Integer, HashSet<Integer>> poss){
+		ArrayList<Integer> emptyFields = new ArrayList<>();
+		// Find the fields which are still empty
+		for(int k: poss.keySet()){
+			if(poss.get(k).size() != 0)
+				emptyFields.add(k);
+		}
+
+		// No we have to find x amount of fields, which can only contain x amount of values.
+		// Than we can remove these x values from all the other cells.
+		// TODO: Find a way to use a dynamic number of fields instead of the hardcoded i=2
+		int i = 2;
+		//for(int i = 2; i < emptyFields.size(); i++) {
+			// Check each combination of fields.
+			for(int j = 0; j <= emptyFields.size()-i+1; j++){
+				if(poss.get(emptyFields.get(j)).size() <= i) {
+					for (int k = j+1; k < emptyFields.size(); k++) {
+						if (poss.get(emptyFields.get(k)).size() <= i) {
+							// Use a hashSet because this will prevent duplicates
+							HashSet<Integer> possibleValues = new HashSet<>();
+							possibleValues.addAll(poss.get(emptyFields.get(j)));
+							possibleValues.addAll(poss.get(emptyFields.get(k)));
+
+							if (possibleValues.size() == i) {
+								//System.out.println("Removing:  " + possibleValues.toString());
+								// Remove these options from all other cols.
+								for(int x = 0; x < emptyFields.size(); x++){
+									if(x != j && x != k){
+										HashSet<Integer> tmp = poss.get(emptyFields.get(x));
+										tmp.removeAll(possibleValues);
+										poss.put(emptyFields.get(x), tmp);
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+		//}
+
+		return poss;
+	}
+
 	// Overrides
 	@Override
 	public String toString(){
