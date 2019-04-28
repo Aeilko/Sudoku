@@ -5,48 +5,44 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.TreeMap;
 
+import java.util.function.Function;
+
 import sudoku.Sudoku;
 import sudoku.Coordinate;
 
 /**
- * Een klasse die probeert om een Sudoku op te lossen.
+ * A solver for Sudoku puzzles
  * @author Aeilko Bos
  */
 public class SudokuSolver {
-	// De sudoku die opgelost moet worden
+	// The Sudoku which is being solved
 	private Sudoku sudoku;
-	// De sudoku waar mee gestart is
+	// The Sudoku like it was at the start
 	private Sudoku startSudoku;
-	// Of de sudoku opgelost is
+	// Wheter or not the Sudoku is solved
 	private boolean solved;
 	
-	// Mogelijkheden
-	// TODO: hokPossible is just wrong. Change it to a hashSet, and define which way around the coords are.
-	// TODO: Currently the called (col, row) in the code, but actually are (row, col)
-	private TreeMap<Coordinate, ArrayList<Integer>> hokPossible;
-	private TreeMap<Integer, ArrayList<Integer>> colPossible;
-	private TreeMap<Integer, ArrayList<Integer>> rowPossible;
-	private TreeMap<Integer, ArrayList<Integer>> blokPossible;
+	// Possibilities per field
+	// fieldPossible uses the Coordinate(row, col)
+	private TreeMap<Coordinate, HashSet<Integer>> fieldPossible;
 	
-	// Tijd bijhouden
+	// Keep track of how long the solver takes.
 	private long startTime;
 	private long stopTime;
-	
+
+
 	
 	// Constructor
 	/**
-	 * Maakt een nieuwe solver aan voor de gegeven Sudoku.
-	 * @param s De sudoku die opgelost moet worden.
+	 * Creates a new SudokuSolves based on a Sudoku object
+	 * @param s The Sudoku to be solved.
 	 */
 	public SudokuSolver(Sudoku s){
 		this.sudoku = (Sudoku) s.clone();
 		this.startSudoku = s;
 		this.solved = false;
 		
-		this.hokPossible = new TreeMap<Coordinate, ArrayList<Integer>>();
-		this.colPossible = new TreeMap<Integer, ArrayList<Integer>>();
-		this.rowPossible = new TreeMap<Integer, ArrayList<Integer>>();
-		this.blokPossible = new TreeMap<Integer, ArrayList<Integer>>();
+		this.fieldPossible = new TreeMap<>();
 		
 		this.startTime = -1;
 		this.stopTime = -1;
@@ -55,8 +51,8 @@ public class SudokuSolver {
 	}
 	
 	/**
-	 * Maakt een nieuwe solver aan, gebaseerd op een dubbelle short array met de waardes van de sudoku (0 = leeg).
-	 * @param s De dubbele short array.
+	 * Creates a new SudokuSolver based on an double array representation of the Sudoku ([col][row])
+	 * @param s The dubble short array.
 	 * @require s.length == 9
 	 * @require for(short i = 0; i < 9; i++){ s[i].length == 9
 	 * @require for(short i = 0; i < 9; i++){ for(short j = 0; j < 9; j++){ s[i][j] >= 0 && s[i][j] <= 9 }}
@@ -65,113 +61,121 @@ public class SudokuSolver {
 		this(new Sudoku(s));
 	}
 	
-	
+
+
 	// Commands
 	/**
-	 * Probeert de sudoku op te lossen
-	 * @return Of de sudoku is opgelost
+	 * Attempts to solve the Sudoku
+	 * @return Wheter or not the Soduku is solved.
 	 */
 	public boolean solve(){
 		this.prepareSolve();
+
 		this.startTime = System.nanoTime();
-		// Maximaal 81 keer proberen (aantal vakjes in een sudoku)
+		// Attempt the solving tricks at most 81 times.
 		for(int i = 0; i < 81 && !this.solved; i++){
-			System.out.println("Round " + i);
+			// Save the current state of the Sudoku so we can check wheter anything changes.
 			Sudoku oldSudoku = (Sudoku) this.sudoku.clone();
-			this.enkeleMogelijkheid();
-			this.checkCols();
-			this.checkRows();
-			this.checkBlok();
+
+			// Fill every field which only has one possibility
+			this.singlePossibility();
+
+			// Check if there is a value which is only possible on one field in a group.
+			this.attemptOnAllGroups(e -> this.singles(e));
 			
-			// Deze methode's alleen uitvoeren als er niks veranderd is, aangezien deze vrij zwaar zijn.
+			// Only attempt these methods when nothing has changed yet, since these are expensive
 			if(this.sudoku.equals(oldSudoku)){
-				this.twinCols();
-				this.twinRows();
-				this.twinBlok();
+				this.attemptOnAllGroups(e -> this.twins(e));
 
 				if(this.sudoku.equals(oldSudoku)){
-					this.slings();
+					this.attemptOnAllGroups(e -> this.slings(e));
 				}
 			}
 
 			this.checkSolved();
 		}
 
-		//System.out.println("Row 1 poss: " + this.getRowPossibilities(0));
-		//System.out.println("Col 1 poss: " + this.getColPossibilities(0));
-		//System.out.println("Block 3 poss: " + this.getBlockPossibilities(2));
-
 		this.stopTime = System.nanoTime();;
 		return this.isSolved();
 	}
-	
+
+
+
+	// Queries
 	/**
-	 * Doet het voorbereidende werk voor het oplossen van de sudoku.
-	 * Haalt alle vakjes op en genereert lijsten met mogelijke getallen.
+	 * @return Wheter or not the Sudoku is solved
+	 */
+	public boolean isSolved(){
+		return this.solved;
+	}
+
+
+
+	// Helper methods
+	/**
+	 * Prepares the class to solve the Sudoku.
+	 * Generates the list of possibilities for every field
 	 */
 	private void prepareSolve(){
-		// Een lijst met alle mogelijkheden
-		ArrayList<Integer> legeLijst = new ArrayList<Integer>();
+		// A list which includes all posibilities.
+		HashSet<Integer> emptyList = new HashSet<>();
 		for(int i = 1; i <= 9; i++){
-			legeLijst.add(i);
+			emptyList.add(i);
 		}
 		
-		// Alle lijsten instellen met alle mogelijkheden
+		// Set all possibility lists with all the values
 		for(int i = 0; i < 9; i++){
-			this.colPossible.put(i, new ArrayList<Integer>(legeLijst));
-			this.rowPossible.put(i, new ArrayList<Integer>(legeLijst));
-			this.blokPossible.put(i, new ArrayList<Integer>(legeLijst));
 			for(int j = 0; j < 9; j++){
-				this.hokPossible.put(new Coordinate(i, j), new ArrayList<Integer>(legeLijst));
+				this.fieldPossible.put(new Coordinate(i, j), new HashSet<>(emptyList));
 			}
 		}
 		
-		// Alle hokjes ophalen
-		for(int i = 0; i < 9; i++){
-			for(int j = 0; j < 9; j++){
-				int val = (int) this.sudoku.getVal((short) i, (short) j);
+		// Check all fields, remove possibilities
+		for(short row = 0; row < 9; row++){
+			for(short col = 0; col < 9; col++){
+				short val = this.sudoku.getVal(row, col);
 				if(val != 0){
-					// Hokje is niet leeg, waarde aanpassen
-					this.setValue(i, j, val);
+					// If the field is not empty we set the value in the solver, which removes the possibilities of related fields.
+					this.setValue(row, col, val);
 				}
 			}
 		}
 	}
-	
+
 	/**
-	 * Past de waarde van een hokje aan in de solver.
-	 * @param col De kolom van het hokje.
-	 * @param row De rij van het hokje.
-	 * @param val De nieuwe waarde van het hokje.
+	 * Updates the value of a field for the solver, which also updates the possibilities of related fields.
+	 * @param row The row of the field
+	 * @param col The column of the field
+	 * @param val The new value of the field
 	 * @require col >= 0 && col <= 8
 	 * @require row >= 0 && row <= 8
 	 * @require val >= 1 && val <= 9
 	 */
-	private void setValue(int col, int row, int val){
-		// Algemene mogelijkheden veranderen.
-		this.hokPossible.put(new Coordinate(col, row), new ArrayList<Integer>());
-		this.colPossible.get(col).remove((Object) val);
-		this.rowPossible.get(row).remove((Object) val);
-		this.blokPossible.get(this.coordsToBlok(col, row)).remove((Object) val);
+	private void setValue(short row, short col, short val){
+		this.fieldPossible.put(new Coordinate(row, col), new HashSet<>());
 		
-		// Mogelijkheid uit hele kolom en rij verwijderen.
+		// Remove possibility for every field in this row and col
 		for(int i = 0; i < 9; i++){
-			this.hokPossible.get(new Coordinate(col, i)).remove((Object) val);
-			this.hokPossible.get(new Coordinate(i, row)).remove((Object) val);
+			//System.out.println("Possible pre (" + row + ", " + col + "): " + this.fieldPossible.get(new Coordinate(row, i)));
+			this.fieldPossible.get(new Coordinate(row, i)).remove((int) val);
+			this.fieldPossible.get(new Coordinate(i, col)).remove((int) val);
+			//System.out.println("Possible post (" + row + ", " + col + "): " + this.fieldPossible.get(new Coordinate(row, i)));
+
 		}
 		
-		// Mogelijkheid uit hele blok verwijderen.
-		int blok = this.coordsToBlok(col, row);
-		int colStart = (blok%3)*3;
-		int rowStart = (blok/3)*3;
-		for(int i = colStart; i < colStart+3; i++){
-			for(int j = rowStart; j < rowStart+3; j++){
-				this.hokPossible.get(new Coordinate(i, j)).remove((Object) val);
+		// Remove possibility for every field in this block
+		int block = this.coordsToBlock(row, col);
+		int colStart = (block%3)*3;
+		int rowStart = (block/3)*3;
+		//System.out.println("(" + row + ", " + col + "), block: " + block + ", (" + rowStart + ", " + colStart + ")");
+		for(int r = rowStart; r < rowStart+3; r++){
+			for(int c = colStart; c < colStart+3; c++){
+				this.fieldPossible.get(new Coordinate(r, c)).remove((int) val);
 			}
 		}
 
-		// Waarde doorgeven
-		this.sudoku.setVal((short) col, (short) row, (short) val);
+		// Set the value to the Sudoku object
+		this.sudoku.setVal(row, col, val);
 	}
 	
 	/**
@@ -179,40 +183,31 @@ public class SudokuSolver {
 	 */
 	private void checkSolved(){
 		boolean result = true;
-		for(short i = 0; i < 9 && result; i++){
-			for(short j = 0; j < 9 && result; j++){
-				if(this.sudoku.getVal(i, j) == 0){
+		for(short row = 0; row < 9 && result; row++){
+			for(short col = 0; col < 9 && result; col++){
+				if(this.sudoku.getVal(row, col) == 0){
 					result = false;
 				}
 			}
 		}
 		this.solved = result;
 	}
-	
-	
-	// Queries
+
 	/**
-	 * @return Of de sudoku is opgelost.
-	 */
-	public boolean isSolved(){
-		return this.solved;
-	}
-	
-	/**
-	 * Vertaalt een kolom-rij combinatie naar een blok op het sudoku veld.
-	 * @param col De kolom van het hokje.
-	 * @param row De rij van het hokje.
-	 * @return Het blok waar dit hokje in ligt.
+	 * Translates coordinates to the block ID, starting from the top left with 0, left to right, top to bottom
+	 * @param row The row of the field
+	 * @param col The column of the field
+	 * @return The ID of the block the field is in.
 	 * @require col >= 0 && col <= 8
 	 * @require row >= 0 && row <= 8
 	 */
-	private int coordsToBlok(int col, int row){
+	private int coordsToBlock(int row, int col){
 		return (3*(row/3))+(col/3);
 	}
 	
 	/**
-	 * Geeft de tijd die gebruikt is om de sudoku op te lossen op -1 als er nog niet geprobeert is de sudoku op te lossen.
-	 * @return De tijd in seconden.
+	 * Returns the time the solver needed to solve the Sudoku, or -1 if the solver isn't done solving yet.
+	 * @return The time in seconds.
 	 */
 	public double getTimeNeeded(){
 		if(startTime == -1 || stopTime == -1){
@@ -223,377 +218,144 @@ public class SudokuSolver {
 		}
 	}
 	
-	
-	// Solve methode's
+
+
+	// Solve methods
 	/**
-	 * Controleert of er ergens een hokje is met nog maar 1 mogelijkheid.
+	 * Checks if there are any fields which have only one possibility, so we can set the value.
 	 */
-	private void enkeleMogelijkheid(){
-		// Controleer alle hokjes.
-		for(int i = 0; i < 9; i++){
-			for(int j = 0; j < 9; j++){
-				ArrayList<Integer> temp = this.hokPossible.get(new Coordinate(i, j));
-				if(temp.size() == 1){
-					// Er is maar 1 mogelijkheid in dit hokje, waarde invullen.
-					this.setValue(i, j, temp.get(0));
+	private void singlePossibility(){
+		for(short row = 0; row < 9; row++){
+			for(short col = 0; col < 9; col++){
+				HashSet<Integer> tmp = this.fieldPossible.get(new Coordinate(row, col));
+				if(tmp.size() == 1){
+					Object[] t = tmp.toArray();
+					int v = (int) t[0];
+					short val = (short) v;
+					this.setValue(row, col, val);
 				}
 			}
 		}
 	}
 
-	private void slings(){
+	/**
+	 * Applies the given solver method to all possible groups in the Sudoku
+	 * @param solver The solver which will be applied to field group
+	 */
+	private void attemptOnAllGroups(Function<HashMap<Integer, HashSet<Integer>>, HashMap<Integer, HashSet<Integer>>> solver){
 		HashMap<Integer, HashSet<Integer>> possibilities;
 
-		// Perform slings with cols.
-		System.out.println("Sling cols");
-		for(int i = 0; i < 9; i++) {
-			possibilities = this.getColPossibilities(i);
-			possibilities = this.sling(possibilities);
-			this.setColPossibilities(i, possibilities);
-		}
-
-		// Perform slings with rows.
-		System.out.println("Sling rows");
+		// Perform the solver on all rows
 		for(int i = 0; i < 9; i++){
 			possibilities = this.getRowPossibilities(i);
-			possibilities = this.sling(possibilities);
+			possibilities = solver.apply(possibilities);
 			this.setRowPossibilities(i, possibilities);
 		}
 
-		// Perform slings with blocks.
-		System.out.println("Sling blocks");
+		// Perform the solver on all cols
+		for(int i = 0; i < 9; i++) {
+			possibilities = this.getColPossibilities(i);
+			possibilities = solver.apply(possibilities);
+			this.setColPossibilities(i, possibilities);
+		}
+
+		// Perform the solver on all blocks
 		for(int i = 0; i < 9; i++){
 			possibilities = this.getBlockPossibilities(i);
-			possibilities = this.sling(possibilities);
+			possibilities = solver.apply(possibilities);
 			this.setBlockPossibilities(i, possibilities);
 		}
 	}
 
-	private HashMap<Integer, HashSet<Integer>> getColPossibilities(int col){
-		HashMap<Integer, HashSet<Integer>> result = new HashMap<>();
-
-		for(int row = 0; row < 9; row++){
-			// TODO: Replace hokPossible with a HashSet
-			HashSet<Integer> tmp = new HashSet();
-			tmp.addAll((this.hokPossible.get(new Coordinate(row, col))));
-			result.put(row, tmp);
-		}
-
-		return result;
-	}
-
-	private void setColPossibilities(int col, HashMap<Integer, HashSet<Integer>> poss){
-		for(int row = 0; row < 9; row++){
-			// TODO: replace hokPossible with a HashSet
-			ArrayList<Integer> tmp = new ArrayList<>();
-			tmp.addAll(poss.get(row));
-			this.hokPossible.put(new Coordinate(row, col), tmp);
-		}
-	}
-
-	private HashMap<Integer, HashSet<Integer>> getRowPossibilities(int row){
-		HashMap<Integer, HashSet<Integer>> result = new HashMap<>();
-
-		for(int col = 0; col < 9; col++){
-			// TODO: replace hokPossible with a HashSet
-			HashSet<Integer> tmp = new HashSet<>();
-			tmp.addAll(this.hokPossible.get(new Coordinate(row, col)));
-			result.put(col, tmp);
-		}
-
-		return result;
-	}
-
-	private void setRowPossibilities(int row, HashMap<Integer, HashSet<Integer>> poss){
-		for(int col = 0; col < 9; col++){
-			// TODO: replace hokPossible with a HashSet
-			ArrayList<Integer> tmp = new ArrayList<>();
-			tmp.addAll(poss.get(col));
-			this.hokPossible.put(new Coordinate(row, col), tmp);
-		}
-	}
-
-	private HashMap<Integer, HashSet<Integer>> getBlockPossibilities(int block){
-		HashMap<Integer, HashSet<Integer>> result = new HashMap<>();
-
-		int i = 0;
-		for(int row = (block/3)*3; row < ((block/3)+1)*3; row++){
-			for(int col = (block%3)*3; col < ((block%3)+1)*3; col++) {
-				// TODO: Replace hokPossible with a HashSet
-				HashSet<Integer> tmp = new HashSet<>();
-				tmp.addAll(this.hokPossible.get(new Coordinate(row, col)));
-				result.put(i, tmp);
-				i++;
-			}
-		}
-
-		return result;
-	}
-
-	private void setBlockPossibilities(int block, HashMap<Integer, HashSet<Integer>> poss){
-		int i = 0;
-		for(int row = (block/3)*3; row < ((block/3)+1)*3; row++){
-			for(int col = (block%3)*3; col < ((block%3)+1)*3; col++) {
-				// TODO: Replace hokPossible with a HashSet
-				ArrayList<Integer> tmp = new ArrayList<>();
-				tmp.addAll(poss.get(i));
-				this.hokPossible.put(new Coordinate(row, col), tmp);
-				i++;
-			}
-		}
-	}
-	
 	/**
-	 * Controleert of een waarde maar op 1 plek in een kolom mogelijk is.
+	 * Check whether a value is only possible on one place in the field group
 	 */
-	private void checkCols(){
-		// Voor elke kolom.
-		for(int col = 0; col < 9; col++){
-			// Mogelijkheden in een map met (getal), (rij waar getal mogelijk is).
-			TreeMap<Integer, ArrayList<Integer>> mogelijk = new TreeMap<Integer, ArrayList<Integer>>();
-			// Vullen met lege lijsten
-			for(int i = 1; i < 10; i++){
-				mogelijk.put(i, new ArrayList<Integer>());
-			}
-			
-			// Mogelijkheden toevoegen aan de map.
-			ArrayList<Integer> temp;
-			for(int i = 0; i < 9; i++){
-				// Mogelijke waardes van een specifiek hokje in deze kolom
-				temp = this.hokPossible.get(new Coordinate(col, i));
-				for(int val: temp){
-					//System.out.println("Val: " + val);
-					mogelijk.get((Object) val).add(i);
-				}
-			}
-			
-			// Controleren op waardes die maar op 1 plek mogelijk zijn.
-			for(int i = 1; i < 10; i++){
-				temp = mogelijk.get((Object) i);
-				if(temp.size() == 1){
-					// Slechts 1 mogelijkheid, lees de rij uit en vul de waarde in.
-					int row = temp.get(0);
-					this.setValue(col, row, i);
-				}
+	private HashMap<Integer, HashSet<Integer>> singles(HashMap<Integer, HashSet<Integer>> poss) {
+		// Count the occurrences of each value
+		int[] occurrences = new int[10];
+		for (int field : poss.keySet()) {
+			HashSet<Integer> p = poss.get(field);
+			for (int num : p) {
+				occurrences[num]++;
 			}
 		}
-	}
-	
-	/**
-	 * Controleert of een waarde maar op 1 plek in een rij mogelijk is.
-	 */
-	private void checkRows(){
-		// Voor elke rij.
-		for(int row = 0; row < 9; row++){
-			// Mogelijkheden in een map met (getal), (kolom waar getal mogelijk is).
-			TreeMap<Integer, ArrayList<Integer>> mogelijk = new TreeMap<Integer, ArrayList<Integer>>();
-			// Vullen met lege lijsten
-			for(int i = 1; i < 10; i++){
-				mogelijk.put(i, new ArrayList<Integer>());
-			}
-			
-			// Mogelijkheden toevoegen aan de map.
-			ArrayList<Integer> temp;
-			for(int i = 0; i < 9; i++){
-				// Mogelijke waardes van een specifiek hokje in deze kolom
-				temp = this.hokPossible.get(new Coordinate(i, row));
-				for(int val: temp){
-					mogelijk.get((Object) val).add(i);
-				}
-			}
-			
-			// Controleren op waardes die maar op 1 plek mogelijk zijn.
-			for(int i = 1; i < 10; i++){
-				temp = mogelijk.get((Object) i);
-				if(temp.size() == 1){
-					// Slechts 1 mogelijkheid, lees de rij uit en vul de waarde in.
-					int col = temp.get(0);
-					this.setValue(col, row, i);
-				}
-			}
-		}
-	}
-	
-	/**
-	 * Controleert of een waarde maar op 1 plek in een blok mogelijk is.
-	 */
-	private void checkBlok(){
-		// Voor elk blok
-		for(int blok = 0; blok < 9; blok++){
-			// Mogelijkheden in een map met (getal), (kolom waar getal mogelijk is).
-			TreeMap<Integer, ArrayList<Coordinate>> mogelijk = new TreeMap<Integer, ArrayList<Coordinate>>();
-			// Vullen met lege lijsten
-			for(int i = 1; i < 10; i++){
-				mogelijk.put(i, new ArrayList<Coordinate>());
-			}
-			
-			// Alle hokjes in het blok afgaan
-			ArrayList<Integer> temp;
-			int colStart = (blok%3)*3;
-			int rowStart = (blok/3)*3;
-			for(int i = colStart; i < colStart+3; i++){
-				for(int j = rowStart; j < rowStart+3; j++){
-					temp = this.hokPossible.get(new Coordinate(i, j));
-					for(int val: temp){
-						mogelijk.get((Object) val).add(new Coordinate(i, j));
+
+		// Check if there are any values which only occur once.
+		for (int val = 1; val <= 9; val++) {
+			if (occurrences[val] == 1) {
+				// This value only occurs once, so we have to find in which field it occurs and remove the rest of the possibilities.
+				for (int field : poss.keySet()) {
+					if (poss.get(field).contains(val)) {
+						HashSet<Integer> tmp = new HashSet<>();
+						tmp.add(val);
+						poss.put(field, tmp);
 					}
 				}
 			}
-			
-			// Controleren op waardes die maar op 1 plek mogelijk zijn
-			ArrayList<Coordinate> temp2;
-			for(int i = 1; i < 10; i++){
-				temp2 = mogelijk.get((Object) i);
-				if(temp2.size() == 1){
-					// De waarde i kan slechts in 1 hokje in dit blok, dus vullen we i daar in.
-					Coordinate c = temp2.get(0);
-					this.setValue(c.getX(), c.getY(), i);
-				}
-			}
 		}
+
+		return poss;
 	}
-	
+
 	/**
-	 * Controleert of een getal maar op twee plaatsen in een kolom kan.
-	 * Indien er twee getallen zijn die maar op twee plaatsen kunnen, en dit zijn dezelfde plaatsen kunnen in deze hokjes geen andere getallen meer staan.
+	 * Checks wheter there are any combination of 2 values which can only occur in the same 2 fields.
+	 * If so we can remove all other possibilities in these 2 fields.
 	 */
-	private void twinCols(){
-		// Elke rij
-		for(int col = 0; col < 9; col++){
-			// Map waardes volgens (waarde), (Lijst met rijen)
-			TreeMap<Integer, ArrayList<Integer>> waardes = new TreeMap<Integer, ArrayList<Integer>>();
-			// Vullen met lege lijsten
-			for(int val = 1; val <= 9; val++){
-				waardes.put(val, new ArrayList<Integer>());
+	private HashMap<Integer, HashSet<Integer>> twins(HashMap<Integer, HashSet<Integer>> poss) {
+		// Count the occurrences of each value
+		int[] occurrences = new int[10];
+		for (int field : poss.keySet()) {
+			HashSet<Integer> p = poss.get(field);
+			for (int num : p) {
+				occurrences[num]++;
 			}
-			
-			// Alle hokjes controleren
-			ArrayList<Integer> temp;
-			for(int row = 0; row < 9; row++){
-				temp = this.hokPossible.get(new Coordinate(col, row));
-				for(Integer val: temp){
-					waardes.get((Object) val).add(row);
-				}
-			}
-			
-			// Controleren zijn of er getallen maar op twee plek kunnen staan.
-			ArrayList<Integer> twoPossible = new ArrayList<Integer>();
-			for(int val = 1; val <= 9; val++){
-				temp = waardes.get((Object) val);
-				if(temp.size() == 2){
-					for(Integer waarde: twoPossible){
-						if(waardes.get((Object) waarde).equals(temp)){
-							// Er zijn twee waardes die enkel in dezelfde twee hokjes kunnen.
-							ArrayList<Integer> newPossible = new ArrayList<Integer>();
-							newPossible.add(waarde);
-							newPossible.add(val);
-							for(Integer row: temp){
-								// Voor beide hokjes de mogelijkheden aanpassen naar enkel deze twee waardes
-								this.hokPossible.put(new Coordinate(col, row), new ArrayList<Integer>(newPossible));
-							}
-						}
+		}
+
+		// Find the values with two occurrences
+		HashSet<Integer> twices = new HashSet<Integer>();
+		for(int val = 1; val <= 9; val++){
+			if(occurrences[val] == 2)
+				twices.add(val);
+		}
+
+		// Collect the fields in which they occur
+		HashMap<Integer, ArrayList<Integer>> fields = new HashMap<>();
+		for(int field: poss.keySet()){
+			for(int val: twices){
+				if(poss.get(field).contains(val)){
+					if(fields.containsKey(val)){
+						fields.get(val).add(field);
 					}
-					twoPossible.add(val);
+					else{
+						ArrayList<Integer> tmp = new ArrayList<>();
+						tmp.add(field);
+						fields.put(val, tmp);
+					}
 				}
 			}
 		}
-	}
-	
-	/**
-	 * Controleert of een getal maar op twee plaatsen in een rij kan.
-	 * Indien er twee getallen zijn die maar op twee plaatsen kunnen, en dit zijn dezelfde plaatsen kunnen in deze hokjes geen andere getallen meer staan.
-	 */
-	private void twinRows(){
-		// Elk blok
-		for(int row = 0; row < 9; row++){
-			// Map waardes volgens (waarde), (Lijst met kolommen)
-			TreeMap<Integer, ArrayList<Integer>> waardes = new TreeMap<Integer, ArrayList<Integer>>();
-			// Vullen met lege lijsten
-			for(int val = 1; val <= 9; val++){
-				waardes.put(val, new ArrayList<Integer>());
-			}
-			
-			// Alle hokjes controleren
-			ArrayList<Integer> temp;
-			for(int col = 0; col < 9; col++){
-				temp = this.hokPossible.get(new Coordinate(col, row));
-				for(Integer val: temp){
-					waardes.get((Object) val).add(col);
-				}
-			}
-			
-			// Controleren zijn of er getallen maar op ��n plek kunnen staan.
-			ArrayList<Integer> twoPossible = new ArrayList<Integer>();
-			for(int val = 1; val <= 9; val++){
-				temp = waardes.get((Object) val);
-				if(temp.size() == 2){
-					for(Integer waarde: twoPossible){
-						if(waardes.get((Object) waarde).equals(temp)){
-							// Er zijn twee waardes die enkel in dezelfde twee hokjes kunnen.
-							ArrayList<Integer> newPossible = new ArrayList<Integer>();
-							newPossible.add(waarde);
-							newPossible.add(val);
-							for(Integer col: temp){
-								// Voor beide hokjes de mogelijkheden aanpassen naar enkel deze twee waardes
-								this.hokPossible.put(new Coordinate(col, row), new ArrayList<Integer>(newPossible));
-							}
-						}
+
+		// Check if any of the twices have the same fields as possibilities
+		for(int val: fields.keySet()){
+			for(int twinVal: fields.keySet()){
+				if(val != twinVal){
+					if(fields.get(val).equals(fields.get(twinVal))){
+						// They match, remove all other possibilities from these fields.
+						HashSet<Integer> tmp = new HashSet<>();
+						tmp.add(val);
+						tmp.add(twinVal);
+						HashSet<Integer> tmp2 = new HashSet<>();
+						tmp2.add(val);
+						tmp2.add(twinVal);
+
+						poss.put(fields.get(val).get(0), tmp);
+						poss.put(fields.get(val).get(1), tmp2);
 					}
-					twoPossible.add(val);
 				}
 			}
 		}
-	}
-	
-	/**
-	 * Controleert of een getal maar op twee plaatsen in een blok kan.
-	 * Indien er twee getallen zijn die maar op twee plaatsen kunnen, en dit zijn dezelfde plaatsen kunnen in deze hokjes geen andere getallen meer staan.
-	 */
-	private void twinBlok(){
-		// Elk blok
-		for(int blok = 0; blok < 9; blok++){
-			// Map waardes volgens (waarde), (Lijst met co�rdinaten)
-			TreeMap<Integer, ArrayList<Coordinate>> waardes = new TreeMap<Integer, ArrayList<Coordinate>>();
-			// Vullen met lege lijsten
-			for(int val = 1; val <= 9; val++){
-				waardes.put(val, new ArrayList<Coordinate>());
-			}
-			
-			// Alle hokjes controleren
-			ArrayList<Integer> temp;
-			int startCol = (blok%3)*3;
-			int startRow = (blok/3)*3;
-			for(int col = startCol; col < startCol+3; col++){
-				for(int row = startRow; row < startRow+3; row++){
-					temp = this.hokPossible.get(new Coordinate(col, row));
-					for(Integer val: temp){
-						waardes.get((Object) val).add(new Coordinate(col, row));
-					}
-				}
-			}
-			
-			// Controleren zijn of er getallen maar op twee plek kunnen staan.
-			ArrayList<Coordinate> temp2;
-			ArrayList<Integer> twoPossible = new ArrayList<Integer>();
-			for(int val = 1; val <= 9; val++){
-				temp2 = waardes.get((Object) val);
-				if(temp2.size() == 2){
-					for(Integer waarde: twoPossible){
-						if(waardes.get((Object) waarde).equals(temp2)){
-							// Er zijn twee waardes die enkel in dezelfde twee hokjes kunnen.
-							ArrayList<Integer> newPossible = new ArrayList<Integer>();
-							newPossible.add(waarde);
-							newPossible.add(val);
-							for(Coordinate coord: temp2){
-								// Voor beide hokjes de mogelijkheden aanpassen naar enkel deze twee waardes
-								this.hokPossible.put(new Coordinate(coord.getX(), coord.getY()), new ArrayList<Integer>(newPossible));
-							}
-						}
-					}
-					twoPossible.add(val);
-				}
-			}
-		}
+
+		return poss;
 	}
 
 	/***
@@ -601,7 +363,7 @@ public class SudokuSolver {
 	 * Example: 4 fields, possibilities (8,3),(3,6),(6,8),(9,3). The first 3 columns must contain 3,6 and 8.
 	 * 			So now we can remove 3 as a possibility from the 4th field, and therefore it has to be 9.
 	 */
-	private HashMap<Integer, HashSet<Integer>> sling(HashMap<Integer, HashSet<Integer>> poss){
+	private HashMap<Integer, HashSet<Integer>> slings(HashMap<Integer, HashSet<Integer>> poss){
 		ArrayList<Integer> emptyFields = new ArrayList<>();
 		// Find the fields which are still empty
 		for(int k: poss.keySet()){
@@ -614,35 +376,107 @@ public class SudokuSolver {
 		// TODO: Find a way to use a dynamic number of fields instead of the hardcoded i=2
 		int i = 2;
 		//for(int i = 2; i < emptyFields.size(); i++) {
-			// Check each combination of fields.
-			for(int j = 0; j <= emptyFields.size()-i+1; j++){
-				if(poss.get(emptyFields.get(j)).size() <= i) {
-					for (int k = j+1; k < emptyFields.size(); k++) {
-						if (poss.get(emptyFields.get(k)).size() <= i) {
-							// Use a hashSet because this will prevent duplicates
-							HashSet<Integer> possibleValues = new HashSet<>();
-							possibleValues.addAll(poss.get(emptyFields.get(j)));
-							possibleValues.addAll(poss.get(emptyFields.get(k)));
+		// Check each combination of fields.
+		for(int j = 0; j <= emptyFields.size()-i+1; j++){
+			if(poss.get(emptyFields.get(j)).size() <= i) {
+				for (int k = j+1; k < emptyFields.size(); k++) {
+					if (poss.get(emptyFields.get(k)).size() <= i) {
+						// Use a hashSet because this will prevent duplicates
+						HashSet<Integer> possibleValues = new HashSet<>();
+						possibleValues.addAll(poss.get(emptyFields.get(j)));
+						possibleValues.addAll(poss.get(emptyFields.get(k)));
 
-							if (possibleValues.size() == i) {
-								//System.out.println("Removing:  " + possibleValues.toString());
-								// Remove these options from all other cols.
-								for(int x = 0; x < emptyFields.size(); x++){
-									if(x != j && x != k){
-										HashSet<Integer> tmp = poss.get(emptyFields.get(x));
-										tmp.removeAll(possibleValues);
-										poss.put(emptyFields.get(x), tmp);
-									}
+						if (possibleValues.size() == i) {
+							//System.out.println("Removing:  " + possibleValues.toString());
+							// Remove these options from all other cols.
+							for(int x = 0; x < emptyFields.size(); x++){
+								if(x != j && x != k){
+									HashSet<Integer> tmp = poss.get(emptyFields.get(x));
+									tmp.removeAll(possibleValues);
+									poss.put(emptyFields.get(x), tmp);
 								}
 							}
 						}
 					}
 				}
 			}
+		}
 		//}
 
 		return poss;
 	}
+
+	/**
+	 * Returns the possibilities of all values in the given column
+	 */
+	private HashMap<Integer, HashSet<Integer>> getColPossibilities(int col){
+		HashMap<Integer, HashSet<Integer>> result = new HashMap<>();
+
+		for(int row = 0; row < 9; row++)
+			result.put(row, this.fieldPossible.get(new Coordinate(row, col)));
+
+		return result;
+	}
+
+	/**
+	 * Saves the given values to the correct fields of the given column
+	 */
+	private void setColPossibilities(int col, HashMap<Integer, HashSet<Integer>> poss){
+		for(int row = 0; row < 9; row++)
+			this.fieldPossible.put(new Coordinate(row, col), poss.get(row));
+	}
+
+	/**
+	 * Returns the possibilities of all values in the given row
+	 */
+	private HashMap<Integer, HashSet<Integer>> getRowPossibilities(int row){
+		HashMap<Integer, HashSet<Integer>> result = new HashMap<>();
+
+		for(int col = 0; col < 9; col++)
+			result.put(col, this.fieldPossible.get(new Coordinate(row, col)));
+
+		return result;
+	}
+
+	/**
+	 * Saves the given values to the correct fields of the given row
+	 */
+	private void setRowPossibilities(int row, HashMap<Integer, HashSet<Integer>> poss){
+		for(int col = 0; col < 9; col++)
+			this.fieldPossible.put(new Coordinate(row, col), poss.get(col));
+	}
+
+	/**
+	 * Returns the possibilities of all values in the given block
+	 */
+	private HashMap<Integer, HashSet<Integer>> getBlockPossibilities(int block){
+		HashMap<Integer, HashSet<Integer>> result = new HashMap<>();
+
+		int i = 0;
+		for(int row = (block/3)*3; row < ((block/3)+1)*3; row++){
+			for(int col = (block%3)*3; col < ((block%3)+1)*3; col++){
+				result.put(i, this.fieldPossible.get(new Coordinate(row, col)));
+				i++;
+			}
+		}
+
+		return result;
+	}
+
+	/**
+	 * Saves the given values to the correct fields of the given block
+	 */
+	private void setBlockPossibilities(int block, HashMap<Integer, HashSet<Integer>> poss){
+		int i = 0;
+		for(int row = (block/3)*3; row < ((block/3)+1)*3; row++){
+			for(int col = (block%3)*3; col < ((block%3)+1)*3; col++) {
+				this.fieldPossible.put(new Coordinate(row, col), poss.get(i));
+				i++;
+			}
+		}
+	}
+
+
 
 	// Overrides
 	@Override
@@ -654,5 +488,38 @@ public class SudokuSolver {
 			result = result + start[i] + "   " + finished[i] + "\n";
 		}
 		return result;
+	}
+
+
+
+	// Main method, for testing purposes
+	public static void main(String[] args){
+		// Some example sudoku's, 1 = simple, 2 = easy, 3 = middle, 4 = hard, 5 = a 6star puzzle from a book
+		short[][] sudoku1 = new short[][]{{0,0,0, 8,0,3, 0,9,0},{7,0,0, 0,0,2, 0,0,0},{0,0,1, 4,0,0, 2,0,0},{0,5,0, 0,2,0, 8,0,0},{1,0,0, 6,0,5, 0,0,0},{0,0,8, 0,0,0, 9,0,7},{0,0,3, 0,0,4, 0,1,0},{5,6,0, 7,0,9, 0,0,3},{0,0,0, 0,0,0, 7,0,0}};
+		short[][] sudoku2 = new short[][]{{0,0,0, 0,0,0, 0,0,1},{0,0,0, 5,0,6, 4,2,0},{0,4,0, 8,0,0, 7,3,0},{8,0,9, 0,0,0, 0,1,0},{0,0,0, 0,0,0, 0,0,0},{0,0,7, 6,0,5, 3,0,8},{7,0,0, 0,0,0, 0,0,0},{0,0,5, 3,0,0, 9,0,0},{0,0,6, 0,9,0, 0,4,3}};
+		short[][] sudoku3 = new short[][]{{0,0,0, 0,0,0, 0,0,0},{5,0,4, 7,0,8, 1,0,9},{0,0,0, 5,4,0, 0,0,7},{0,0,9, 0,0,0, 0,0,0},{8,0,0, 2,0,4, 7,5,0},{0,0,0, 0,5,7, 0,0,8},{0,0,7, 1,0,0, 9,0,0},{0,3,6, 9,0,0, 0,0,0},{0,0,0, 0,0,0, 3,0,0}};
+		short[][] sudoku4 = new short[][]{{0,4,0, 8,0,0, 0,0,0},{0,0,0, 1,5,0, 0,0,0},{5,0,0, 0,9,7, 0,0,0},{0,0,0, 0,7,0, 8,0,3},{0,0,0, 4,0,8, 6,0,0},{7,0,8, 9,3,0, 0,0,0},{9,0,0, 0,0,0, 2,0,1},{0,7,0, 0,0,0, 0,6,4},{0,0,0, 3,4,0, 0,9,0}};
+		short[][] sudoku5 = new short[][]{{0,0,7, 4,0,0, 0,1,0},{0,0,0, 0,8,6, 0,2,0},{3,8,0, 0,0,2, 0,6,0},{0,0,0, 0,5,9, 0,4,0},{1,4,0, 0,0,0, 0,8,6},{0,7,0, 6,4,0, 0,0,0},{0,2,0, 8,0,0, 0,5,1},{0,5,0, 2,7,0, 0,0,0},{0,1,0, 0,0,5, 4,0,0}};
+
+		TreeMap<String, Sudoku> sudokus = new TreeMap<>();
+		sudokus.put("1 - Simple", new Sudoku(sudoku1));
+		sudokus.put("2 - Easy", new Sudoku(sudoku2));
+		sudokus.put("3 - Middle", new Sudoku(sudoku3));
+		sudokus.put("4 - Hard", new Sudoku(sudoku4));
+		sudokus.put("5 - 6 Stars", new Sudoku(sudoku5));
+
+		for(String name: sudokus.keySet()){
+			Sudoku s = sudokus.get(name);
+			SudokuSolver ss = new SudokuSolver(s);
+			System.out.println("Sudoku " + name);
+			if(ss.solve()){
+				System.out.println("Opgelost!");
+			}
+			else{
+				System.out.println("Niet opgelost");
+			}
+			System.out.println("Tijd: " + ss.getTimeNeeded() + " seconden");
+			System.out.println(ss);
+		}
 	}
 }

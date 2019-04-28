@@ -5,21 +5,23 @@ import java.util.TreeMap;
 import sudoku.solver.SudokuSolver;
 
 /**
- * Modelleert een sudoku veld
+ * A game of Sudoku
  * @author Aeilko Bos
  */
 public class Sudoku implements Cloneable {
-	// Een lege sudoku in een dubbele short array
+	// An empty sudoku field
 	public static final short[][] emptySudoku = new short[][]{{0,0,0, 0,0,0, 0,0,0},{0,0,0, 0,0,0, 0,0,0},{0,0,0, 0,0,0, 0,0,0},{0,0,0, 0,0,0, 0,0,0},{0,0,0, 0,0,0, 0,0,0},{0,0,0, 0,0,0, 0,0,0},{0,0,0, 0,0,0, 0,0,0},{0,0,0, 0,0,0, 0,0,0},{0,0,0, 0,0,0, 0,0,0}};
-	
-	// De sudoku in een dubbele short array volgens waardes[col][row], met het hokje als waarde of 0 voor leeg.
+
+	// The value of the fields in this sudoku, using 0 for an empty field.
+	// The double array uses this structure: values[col][row]
 	private short[][] values;
 	
-	
+
+
 	// Constructor
 	/**
-	 * Maakt een nieuwe sodoku aan met de gegeven waardes.
-	 * @param cols Dubbele short array met de getallen die in de sudoku staan
+	 * Creates a new Sudoku which contains the values of the given double arrays
+	 * @param cols Short double array which contain the values of the Sudoku fields, use 0 for an empty field.
 	 * @require cols.length == 9
 	 * @require for(int i = 0; i < cols.length; i++) cols[i].length == 9
 	 * @require for(int i = 0; i < cols.length; i++){ for(int j = 0; j < cols[i].length; j++){ cols[i][j] >= 0 && cols[i][j] <= 9 }}
@@ -29,45 +31,49 @@ public class Sudoku implements Cloneable {
 	}
 	
 	/**
-	 * Maakt een lege sudoku aan
+	 * Creates an empty Sudoku
 	 */
 	public Sudoku(){
 		this(Sudoku.emptySudoku);
 	}
 	
-	
+
+
 	// Commands
 	/**
-	 * Past een waarde in een sudoku aan
-	 * @param col De kolom van het hokje dat aangepast moet worden.
-	 * @param row De rij van het hokje dat aangepast moet worden.
-	 * @param val De nieuwe waarde die in het hokje moet komen te staan (0 = leeg).
+	 * Sets the value of a field in the Sudoku
+	 * @param row The row of the field which is set
+	 * @param col The column of the field which is set
+	 * @param val The new value of the specified field, use 0 for empty
 	 * @require col >= 0 && col <= 8
 	 * @require row >= 0 && col <= 8
 	 * @require val >= 0 && val <= 9
 	 */
-	public void setVal(short col, short row, short val){
-		this.values[col][row] = val;
+	public void setVal(short row, short col, short val){
+		this.values[row][col] = val;
 	}
 	
 	/**
-	 * Leegt de sudoku
+	 * Empty this sudoku
 	 */
 	public void empty(){
 		this.values = Sudoku.emptySudoku;
 	}
 
+
 	
 	// Queries
 	/**
-	 * @param col De kolom van het hokje
-	 * @param row De rij van het hokje
-	 * @return De waarde van een hokje
+	 * Returns the value of the given field
+	 * @param row The row of the field
+	 * @param col The column of the field
+	 * @return The value of the requested field
 	 */
-	public short getVal(short col, short row){
-		return this.values[col][row];
+	public short getVal(short row, short col){
+		return this.values[row][col];
 	}
-	
+
+
 	
 	// Override's
 	@Override
@@ -118,9 +124,7 @@ public class Sudoku implements Cloneable {
 			// We are required to call this, but this does not clone it correctly
 			super.clone();
 		}
-		catch (CloneNotSupportedException e) {
-			e.printStackTrace();
-		}
+		catch (CloneNotSupportedException e) { }
 
 		short[][] newS = new short[9][9];
 		for(short i = 0; i < 9; i++){
@@ -129,37 +133,5 @@ public class Sudoku implements Cloneable {
 			}
 		}
 		return new Sudoku(newS);
-	}
-	
-	
-	// Main method, for testing purposes
-	public static void main(String[] args){
-		// Sudoku's laden, 1 = simpel, 2 = easy, 3 = middel, 4 = hard
-		short[][] sudoku1 = new short[][]{{0,0,0, 8,0,3, 0,9,0},{7,0,0, 0,0,2, 0,0,0},{0,0,1, 4,0,0, 2,0,0},{0,5,0, 0,2,0, 8,0,0},{1,0,0, 6,0,5, 0,0,0},{0,0,8, 0,0,0, 9,0,7},{0,0,3, 0,0,4, 0,1,0},{5,6,0, 7,0,9, 0,0,3},{0,0,0, 0,0,0, 7,0,0}};
-		short[][] sudoku2 = new short[][]{{0,0,0, 0,0,0, 0,0,1},{0,0,0, 5,0,6, 4,2,0},{0,4,0, 8,0,0, 7,3,0},{8,0,9, 0,0,0, 0,1,0},{0,0,0, 0,0,0, 0,0,0},{0,0,7, 6,0,5, 3,0,8},{7,0,0, 0,0,0, 0,0,0},{0,0,5, 3,0,0, 9,0,0},{0,0,6, 0,9,0, 0,4,3}};
-		short[][] sudoku3 = new short[][]{{0,0,0, 0,0,0, 0,0,0},{5,0,4, 7,0,8, 1,0,9},{0,0,0, 5,4,0, 0,0,7},{0,0,9, 0,0,0, 0,0,0},{8,0,0, 2,0,4, 7,5,0},{0,0,0, 0,5,7, 0,0,8},{0,0,7, 1,0,0, 9,0,0},{0,3,6, 9,0,0, 0,0,0},{0,0,0, 0,0,0, 3,0,0}};
-		short[][] sudoku4 = new short[][]{{0,4,0, 8,0,0, 0,0,0},{0,0,0, 1,5,0, 0,0,0},{5,0,0, 0,9,7, 0,0,0},{0,0,0, 0,7,0, 8,0,3},{0,0,0, 4,0,8, 6,0,0},{7,0,8, 9,3,0, 0,0,0},{9,0,0, 0,0,0, 2,0,1},{0,7,0, 0,0,0, 0,6,4},{0,0,0, 3,4,0, 0,9,0}};
-		short[][] sudoku5 = new short[][]{{0,0,7, 4,0,0, 0,1,0},{0,0,0, 0,8,6, 0,2,0},{3,8,0, 0,0,2, 0,6,0},{0,0,0, 0,5,9, 0,4,0},{1,4,0, 0,0,0, 0,8,6},{0,7,0, 6,4,0, 0,0,0},{0,2,0, 8,0,0, 0,5,1},{0,5,0, 2,7,0, 0,0,0},{0,1,0, 0,0,5, 4,0,0}};
-
-		TreeMap<String, Sudoku> sudokus = new TreeMap<String, Sudoku>();
-		//sudokus.put("1 - Simple", new Sudoku(sudoku1));
-		//sudokus.put("2 - Easy", new Sudoku(sudoku2));
-		//sudokus.put("3 - Middle", new Sudoku(sudoku3));
-		//sudokus.put("4 - Hard", new Sudoku(sudoku4));
-		sudokus.put("6 sterren", new Sudoku(sudoku5));
-		
-		for(String name: sudokus.keySet()){
-			Sudoku s = sudokus.get(name);
-			SudokuSolver ss = new SudokuSolver(s);
-			System.out.println("Sudoku " + name);
-			if(ss.solve()){
-				System.out.println("Opgelost!");
-			}
-			else{
-				System.out.println("Niet opgelost");				
-			}
-			System.out.println("Tijd: " + ss.getTimeNeeded() + " seconden");
-			System.out.println(ss);
-		}
 	}
 }
