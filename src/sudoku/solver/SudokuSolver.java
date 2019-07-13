@@ -1,5 +1,6 @@
 package sudoku.solver;
 
+import java.lang.reflect.Array;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -74,6 +75,7 @@ public class SudokuSolver {
 		this.startTime = System.nanoTime();
 		// Attempt the solving tricks at most 81 times.
 		for(int i = 0; i < 81 && !this.solved; i++){
+			System.out.println("New orbit");
 			// Save the current state of the Sudoku so we can check wheter anything changes.
 			Sudoku oldSudoku = (Sudoku) this.sudoku.clone();
 
@@ -364,6 +366,7 @@ public class SudokuSolver {
 	 * 			So now we can remove 3 as a possibility from the 4th field, and therefore it has to be 9.
 	 */
 	private HashMap<Integer, HashSet<Integer>> slings(HashMap<Integer, HashSet<Integer>> poss){
+		System.out.println("Sling start");
 		ArrayList<Integer> emptyFields = new ArrayList<>();
 		// Find the fields which are still empty
 		for(int k: poss.keySet()){
@@ -373,38 +376,56 @@ public class SudokuSolver {
 
 		// No we have to find x amount of fields, which can only contain x amount of values.
 		// Than we can remove these x values from all the other cells.
-		// TODO: Find a way to use a dynamic number of fields instead of the hardcoded i=2
-		int i = 2;
-		//for(int i = 2; i < emptyFields.size(); i++) {
-		// Check each combination of fields.
-		for(int j = 0; j <= emptyFields.size()-i+1; j++){
-			if(poss.get(emptyFields.get(j)).size() <= i) {
-				for (int k = j+1; k < emptyFields.size(); k++) {
-					if (poss.get(emptyFields.get(k)).size() <= i) {
-						// Use a hashSet because this will prevent duplicates
-						HashSet<Integer> possibleValues = new HashSet<>();
-						possibleValues.addAll(poss.get(emptyFields.get(j)));
-						possibleValues.addAll(poss.get(emptyFields.get(k)));
+		for(int i = 2; i < emptyFields.size(); i++) {
+			// Check each combination of fields.
+			HashMap<HashSet<Integer>, HashSet<Integer>> slingFields = this.slingsRecursive(i, emptyFields, new HashSet<Integer>(), new HashSet<Integer>(), poss);
 
-						if (possibleValues.size() == i) {
-							//System.out.println("Removing:  " + possibleValues.toString());
-							// Remove these options from all other cols.
-							for(int x = 0; x < emptyFields.size(); x++){
-								if(x != j && x != k){
-									HashSet<Integer> tmp = poss.get(emptyFields.get(x));
-									tmp.removeAll(possibleValues);
-									poss.put(emptyFields.get(x), tmp);
-								}
-							}
+			// Remove the possibilities of sling fields.
+			for (HashSet<Integer> indices : slingFields.keySet()) {
+				HashSet<Integer> possValues = slingFields.get(indices);
+				if (possValues.size() == i) {
+					for (int x = 0; x < emptyFields.size(); x++) {
+						if (!indices.contains(emptyFields.get(x))) {
+							HashSet<Integer> tmp = poss.get(emptyFields.get(x));
+							tmp.removeAll(possValues);
+							poss.put(emptyFields.get(x), tmp);
 						}
 					}
 				}
 			}
 		}
-		//}
-
+		
 		return poss;
 	}
+
+	private HashMap<HashSet<Integer>, HashSet<Integer>> slingsRecursive(int remainingI, ArrayList<Integer> remainingEmptyFields, HashSet<Integer> curIndices, HashSet<Integer> curPoss, HashMap<Integer, HashSet<Integer>> poss){
+		HashMap<HashSet<Integer>, HashSet<Integer>> result = new HashMap<>();
+
+		// Copy remaining fields so we can safely remove values from it while looping over the original.
+		ArrayList<Integer> copyREF = new ArrayList<>(remainingEmptyFields);
+
+		for(int j = 0; j <= remainingEmptyFields.size()-remainingI; j++){
+			// Copy the "current" fields
+			HashSet<Integer> copyCI = new HashSet<>(curIndices);
+			HashSet<Integer> copyCP = new HashSet<>(curPoss);
+			// Add the values of this field to the "current" fields
+			copyCI.add(remainingEmptyFields.get(j));
+			copyCP.addAll(poss.get(remainingEmptyFields.get(j)));
+
+			if(remainingI == 1){
+				// This was the last field, craete result and return it.
+				result.put(copyCI, copyCP);
+			}
+			else{
+				// Prepare the remaining values and call the recursive method.
+				copyREF.remove(0);
+				result.putAll(this.slingsRecursive(remainingI-1, copyREF, copyCI, copyCP, poss));
+			}
+		}
+
+		return result;
+	}
+
 
 	/**
 	 * Returns the possibilities of all values in the given column
