@@ -75,7 +75,6 @@ public class SudokuSolver {
 		this.startTime = System.nanoTime();
 		// Attempt the solving tricks at most 81 times.
 		for(int i = 0; i < 81 && !this.solved; i++){
-			System.out.println("New orbit");
 			// Save the current state of the Sudoku so we can check wheter anything changes.
 			Sudoku oldSudoku = (Sudoku) this.sudoku.clone();
 
@@ -366,7 +365,6 @@ public class SudokuSolver {
 	 * 			So now we can remove 3 as a possibility from the 4th field, and therefore it has to be 9.
 	 */
 	private HashMap<Integer, HashSet<Integer>> slings(HashMap<Integer, HashSet<Integer>> poss){
-		System.out.println("Sling start");
 		ArrayList<Integer> emptyFields = new ArrayList<>();
 		// Find the fields which are still empty
 		for(int k: poss.keySet()){
@@ -394,7 +392,7 @@ public class SudokuSolver {
 				}
 			}
 		}
-		
+
 		return poss;
 	}
 
