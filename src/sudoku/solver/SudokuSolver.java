@@ -93,6 +93,8 @@ public class SudokuSolver {
 				}
 			}
 
+			// TODO: Add a method to apply X-Wing tactic, adding this should be enough to finish solving the "6 stars" sudoku.
+
 			this.checkSolved();
 		}
 
@@ -157,11 +159,8 @@ public class SudokuSolver {
 		
 		// Remove possibility for every field in this row and col
 		for(int i = 0; i < 9; i++){
-			//System.out.println("Possible pre (" + row + ", " + col + "): " + this.fieldPossible.get(new Coordinate(row, i)));
 			this.fieldPossible.get(new Coordinate(row, i)).remove((int) val);
 			this.fieldPossible.get(new Coordinate(i, col)).remove((int) val);
-			//System.out.println("Possible post (" + row + ", " + col + "): " + this.fieldPossible.get(new Coordinate(row, i)));
-
 		}
 		
 		// Remove possibility for every field in this block
@@ -500,12 +499,22 @@ public class SudokuSolver {
 	// Overrides
 	@Override
 	public String toString(){
+		// Display both original and "solved" sudoku side by side.
 		String result = "";
 		String[] start = this.startSudoku.toString().split("\\r?\\n");
 		String[] finished = this.sudoku.toString().split("\\r?\\n");
 		for(int i = 0; i < start.length; i++){
 			result = result + start[i] + "   " + finished[i] + "\n";
 		}
+
+		// Display possibilities of unknown fields.
+		for(Coordinate c: this.fieldPossible.keySet()){
+			HashSet<Integer> poss = this.fieldPossible.get(c);
+			if(poss.size() > 0){
+				result += "\n" + c.toString() + ": " + poss.toString();
+			}
+		}
+
 		return result;
 	}
 
